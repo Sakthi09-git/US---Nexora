@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #090a0f;
+    --surface: #0f111a;
+    --surface-elevated: #161926;
+    --border: rgba(255, 255, 255, 0.08);
+    --partner-a: #8b5cf6;
+    --partner-b: #10b981;
+    --couple-gold: #f59e0b;
+  }
+
+  body {
+    background-color: #090a0f;
+    color: #f1f5f9;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(15, 17, 26, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(22, 25, 38, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+/* Glow highlights */
+.glow-partner-a {
+  box-shadow: 0 0 24px -4px rgba(139, 92, 246, 0.25);
+}
+
+.glow-partner-b {
+  box-shadow: 0 0 24px -4px rgba(16, 185, 129, 0.25);
+}
+
+.glow-couple {
+  box-shadow: 0 0 30px -4px rgba(99, 102, 241, 0.3);
+}
+
+/* Print Styles for PDF Export */
+@media print {
+  body {
+    background: #0f111a !important;
+    color: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}

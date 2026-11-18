@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f111a"/>
+      <stop offset="100%" stop-color="#090a0f"/>
+    </linearGradient>
+    <linearGradient id="ringA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#d946ef"/>
+    </linearGradient>
+    <linearGradient id="ringB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect width="508" height="508" x="2" y="2" rx="126" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- Partner A Circle (Indigo/Violet) -->
+  <circle cx="210" cy="256" r="110" fill="none" stroke="url(#ringA)" stroke-width="32" filter="url(#glow)" stroke-linecap="round" opacity="0.9" />
+  
+  <!-- Partner B Circle (Emerald/Cyan) -->
+  <circle cx="302" cy="256" r="110" fill="none" stroke="url(#ringB)" stroke-width="32" filter="url(#glow)" stroke-linecap="round" opacity="0.9" />
+
+  <!-- Center Shared Sparkle / Leaf -->
+  <circle cx="256" cy="256" r="24" fill="#ffffff" filter="url(#glow)" opacity="0.95" />
+</svg>
+
