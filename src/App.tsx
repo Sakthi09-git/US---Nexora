@@ -78,7 +78,22 @@ const MainLayout: React.FC = () => {
 };
 
 const MainApp: React.FC = () => {
-  const { currentUser } = useApp();
+  const { currentUser, connectByInviteCode } = useApp();
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const joinCode = params.get('join') || params.get('joinUser');
+      if (joinCode) {
+        sessionStorage.setItem('nexora_pending_join', joinCode.toUpperCase());
+        if (currentUser && !currentUser.partner_id) {
+          connectByInviteCode(joinCode);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, [currentUser]);
 
   if (!currentUser) {
     return <LoginPage />;

@@ -6,8 +6,18 @@ import {
   saveAppState, 
   subscribeToAppSync, 
   TODAY_STR, 
-  getInitialDefaultState 
+  getInitialDefaultState,
+  generateInviteCode,
+  setActiveSessionUserId
 } from '../lib/storage';
+import {
+  publishInviteOffer,
+  lookupRemoteInvite,
+  acceptRemoteInvite,
+  checkInviteAcceptance,
+  publishPartnerProgress,
+  fetchPartnerProgress
+} from '../lib/cloudSync';
 import { 
   User, 
   Partnership,
@@ -58,7 +68,7 @@ interface AppContextType {
   todayDateStr: string;
 
   // Auth & Session
-  registerUser: (userData: { full_name: string; email: string; phone_number?: string; password?: string; avatar_url?: string }) => Promise<{ success: boolean; message: string }>;
+  registerUser: (userData: { full_name: string; email: string; phone_number?: string; password?: string; avatar_url?: string; partnerInviteCode?: string }) => Promise<{ success: boolean; message: string }>;
   loginUser: (email: string, password?: string) => Promise<{ success: boolean; message: string }>;
   logoutUser: () => void;
   switchActiveUser: (userId: string) => void;
@@ -69,7 +79,8 @@ interface AppContextType {
   // Partner Connection
   sendPartnerInvitation: (receiverEmail: string) => { success: boolean; message: string };
   inviteUserById: (targetUserId: string) => { success: boolean; message: string };
-  connectByInviteCode: (inviteCode: string) => { success: boolean; message: string };
+  connectByInviteCode: (inviteCode: string) => Promise<{ success: boolean; message: string }>;
+  connectWithPartnerInfo: (partnerInfo: { id?: string; full_name: string; email: string; invite_code?: string }) => { success: boolean; message: string };
   cancelInvitation: (invitationId: string) => void;
   acceptPartnerInvitation: (invitationId: string) => { success: boolean; message: string };
   rejectPartnerInvitation: (invitationId: string) => void;
@@ -159,6 +170,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const isConnectedWithPartner = Boolean(partnerUser && activePartnership);
 
+  // Cross-Device Cloud Sync: Listen for remote invite acceptance
+  useEffect(() => {
+    if (!currentUser || currentUser.partner_id || !currentUser.invite_code) return;
+
+    const interval = setInterval(async () => {
+      try {
+        if (!currentUser.invite_code || currentUser.partner_id) return;
+        const acceptedBy = await checkInviteAcceptance(currentUser.invite_code);
+        if (acceptedBy && acceptedBy.id !== currentUser.id && !currentUser.partner_id) {
+          linkPartnership(acceptedBy);
+        }
+      } catch {
+        // Non-blocking
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentUser?.id, currentUser?.partner_id, currentUser?.invite_code]);
+
   const triggerCelebration = () => {
     try {
       confetti({
@@ -179,6 +209,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     phone_number?: string;
     password?: string;
     avatar_url?: string;
+    partnerInviteCode?: string;
   }): Promise<{ success: boolean; message: string }> => {
     const emailNorm = userData.email.trim().toLowerCase();
     const existing = state.allUsers.find((u) => u.email.toLowerCase() === emailNorm);
@@ -186,8 +217,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, message: 'An account with this email address already exists.' };
     }
 
+    const myInviteCode = generateInviteCode();
+
+    let initialPartnerId: string | null = null;
+    let initialPartnership: Partnership | null = null;
+    let extraUsersToAdd: User[] = [];
+
+    // Check if an invite code was entered
+    const inviteInput = userData.partnerInviteCode?.trim().toUpperCase();
+    if (inviteInput) {
+      // 1. Look up in local users
+      let partner = state.allUsers.find(
+        (u) => u.invite_code?.toUpperCase() === inviteInput || 
+               u.invite_code?.toUpperCase() === `NX-${inviteInput}` ||
+               inviteInput.includes(u.id.slice(-6).toUpperCase())
+      );
+
+      // 2. If not found locally, look up in Cloud Relay
+      if (!partner) {
+        const remote = await lookupRemoteInvite(inviteInput) || await lookupRemoteInvite(`NX-${inviteInput}`);
+        if (remote) {
+          partner = remote;
+          extraUsersToAdd.push(remote);
+        }
+      }
+
+      if (partner) {
+        initialPartnerId = partner.id;
+        initialPartnership = {
+          id: `part-${Date.now()}`,
+          user_a_id: partner.id,
+          user_b_id: '', // Will be set to newUser.id below
+          anniversary_date: new Date().toISOString().split('T')[0],
+          shared_streak: 1,
+          best_shared_streak: 1,
+          status: 'active',
+          created_at: new Date().toISOString()
+        };
+      }
+    }
+
+    const newUserId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (initialPartnership) {
+      initialPartnership.user_b_id = newUserId;
+    }
+
     const newUser: User = {
-      id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newUserId,
       email: emailNorm,
       full_name: userData.full_name.trim(),
       phone_number: userData.phone_number?.trim() || '',
@@ -198,26 +274,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       level: 1,
       is_email_verified: false,
       is_phone_verified: false,
-      partner_id: null,
-      partnership_id: null,
+      partner_id: initialPartnerId,
+      partnership_id: initialPartnership?.id || null,
       share_progress_with_partner: true,
       password: userData.password || 'password123',
+      invite_code: myInviteCode,
       created_at: new Date().toISOString()
     };
 
-    updateAndPersist((prev) => ({
-      ...prev,
-      allUsers: [...prev.allUsers, newUser],
-      currentUserId: newUser.id
-    }));
+    // Auto-broadcast this user's invite code to the cloud relay
+    publishInviteOffer(myInviteCode, newUser);
+
+    // If paired with a remote partner, send acceptance signal back
+    if (inviteInput && initialPartnerId) {
+      acceptRemoteInvite(inviteInput, newUser);
+    }
+
+    setActiveSessionUserId(newUser.id);
+
+    updateAndPersist((prev) => {
+      const mergedUsers = [...prev.allUsers];
+      for (const u of extraUsersToAdd) {
+        if (!mergedUsers.some((x) => x.id === u.id)) {
+          mergedUsers.push(u);
+        }
+      }
+
+      const updatedUsers = mergedUsers.map((u) => {
+        if (initialPartnerId && u.id === initialPartnerId && initialPartnership) {
+          return { ...u, partner_id: newUser.id, partnership_id: initialPartnership.id };
+        }
+        return u;
+      });
+
+      return {
+        ...prev,
+        allUsers: [...updatedUsers, newUser],
+        currentUserId: newUser.id,
+        partnerships: initialPartnership 
+          ? [initialPartnership, ...prev.partnerships] 
+          : prev.partnerships
+      };
+    });
 
     triggerCelebration();
-    return { success: true, message: 'Account successfully registered!' };
+    const successMsg = initialPartnerId 
+      ? 'Account created & successfully connected with your partner!' 
+      : 'Account successfully registered!';
+    return { success: true, message: successMsg };
   };
 
   const loginUser = async (email: string, password?: string): Promise<{ success: boolean; message: string }> => {
     const emailNorm = email.trim().toLowerCase();
-    const user = state.allUsers.find((u) => u.email.toLowerCase() === emailNorm);
+    let user = state.allUsers.find((u) => u.email.toLowerCase() === emailNorm);
     if (!user) {
       return { success: false, message: 'No account found with this email address.' };
     }
@@ -225,8 +334,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, message: 'Invalid password. Please check your credentials.' };
     }
 
+    // Ensure user has an invite code
+    if (!user.invite_code) {
+      user.invite_code = generateInviteCode();
+    }
+
+    // Publish to cloud relay
+    publishInviteOffer(user.invite_code, user);
+
+    setActiveSessionUserId(user.id);
+
     updateAndPersist((prev) => ({
       ...prev,
+      allUsers: prev.allUsers.map((u) => u.id === user.id ? user! : u),
       currentUserId: user.id
     }));
 
@@ -234,6 +354,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const logoutUser = () => {
+    setActiveSessionUserId(null);
     updateAndPersist((prev) => ({
       ...prev,
       currentUserId: null
@@ -279,6 +400,80 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // 2. PARTNER CONNECTION SYSTEM
+  const linkPartnership = (target: User): { success: boolean; message: string } => {
+    if (!currentUser) return { success: false, message: 'Please log in first.' };
+
+    const newPartnership: Partnership = {
+      id: `part-${Date.now()}`,
+      user_a_id: target.id,
+      user_b_id: currentUser.id,
+      anniversary_date: new Date().toISOString().split('T')[0],
+      shared_streak: 1,
+      best_shared_streak: 1,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    updateAndPersist((prev) => {
+      const existingTarget = prev.allUsers.find((u) => u.id === target.id);
+      let updatedAllUsers = existingTarget ? [...prev.allUsers] : [...prev.allUsers, target];
+
+      updatedAllUsers = updatedAllUsers.map((u) => {
+        if (u.id === target.id) {
+          return { ...u, partner_id: currentUser.id, partnership_id: newPartnership.id };
+        }
+        if (u.id === currentUser.id) {
+          return { ...u, partner_id: target.id, partnership_id: newPartnership.id };
+        }
+        return u;
+      });
+
+      return {
+        ...prev,
+        allUsers: updatedAllUsers,
+        partnerships: [newPartnership, ...prev.partnerships]
+      };
+    });
+
+    triggerCelebration();
+    return { success: true, message: `Connected with ${target.full_name}! Shared synergy unlocked.` };
+  };
+
+  const connectWithPartnerInfo = (partnerInfo: { id?: string; full_name: string; email: string; invite_code?: string }): { success: boolean; message: string } => {
+    if (!currentUser) return { success: false, message: 'Please log in first.' };
+    const emailNorm = partnerInfo.email.trim().toLowerCase();
+
+    if (currentUser.email.toLowerCase() === emailNorm || (partnerInfo.id && currentUser.id === partnerInfo.id)) {
+      return { success: false, message: 'You cannot connect with your own account.' };
+    }
+
+    if (currentUser.partner_id) {
+      return { success: false, message: 'You are already in an active partnership. Disconnect first.' };
+    }
+
+    let target = state.allUsers.find((u) => u.email.toLowerCase() === emailNorm || (partnerInfo.id && u.id === partnerInfo.id));
+    if (!target) {
+      target = {
+        id: partnerInfo.id || `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        email: emailNorm,
+        full_name: partnerInfo.full_name.trim(),
+        role: 'user',
+        timezone: 'Asia/Kolkata',
+        xp_points: 0,
+        level: 1,
+        is_email_verified: true,
+        is_phone_verified: false,
+        partner_id: currentUser.id,
+        partnership_id: '',
+        share_progress_with_partner: true,
+        invite_code: partnerInfo.invite_code || generateInviteCode(),
+        created_at: new Date().toISOString()
+      };
+    }
+
+    return linkPartnership(target);
+  };
+
   const sendPartnerInvitation = (receiverEmail: string): { success: boolean; message: string } => {
     if (!currentUser) return { success: false, message: 'Please log in first.' };
     const emailNorm = receiverEmail.trim().toLowerCase();
@@ -291,7 +486,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, message: 'You are already in an active partnership. Disconnect your current partner first before inviting someone else.' };
     }
 
-    // Check if target user exists in the app
+    // Check if target user exists locally
     const targetUser = state.allUsers.find((u) => u.email.toLowerCase() === emailNorm);
     if (targetUser && targetUser.partner_id) {
       return { success: false, message: `${targetUser.full_name} is already connected with another partner.` };
@@ -304,19 +499,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              i.status === 'pending'
     );
     if (mutualInvitation) {
-      // Auto accept!
       return acceptPartnerInvitation(mutualInvitation.id);
     }
 
-    // Check if an invitation is already pending
-    const existingPending = state.partnerInvitations.find(
-      (i) => i.sender_user_id === currentUser.id &&
-             i.receiver_email.toLowerCase() === emailNorm &&
-             i.status === 'pending'
-    );
-    if (existingPending) {
-      return { success: false, message: `An invitation is already pending for ${emailNorm}. Share Code: ${existingPending.invite_code}` };
-    }
+    const userCode = currentUser.invite_code || generateInviteCode();
 
     const newInvitation: PartnerInvitation = {
       id: `inv-${Date.now()}`,
@@ -324,10 +510,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       sender_name: currentUser.full_name,
       sender_email: currentUser.email,
       receiver_email: emailNorm,
-      invite_code: `US-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      invite_code: userCode,
       status: 'pending',
       created_at: new Date().toISOString()
     };
+
+    // Broadcast to Cloud Relay
+    publishInviteOffer(userCode, currentUser);
 
     updateAndPersist((prev) => ({
       ...prev,
@@ -336,7 +525,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return { 
       success: true, 
-      message: `Invitation successfully sent to ${targetUser ? targetUser.full_name : emailNorm}! Share code: ${newInvitation.invite_code}` 
+      message: `Invitation successfully created for ${targetUser ? targetUser.full_name : emailNorm}! Share code: ${userCode}` 
     };
   };
 
@@ -402,18 +591,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true, message: `Connected with ${sender.full_name}! Shared synergy unlocked.` };
   };
 
-  const connectByInviteCode = (inviteCode: string): { success: boolean; message: string } => {
+  const connectByInviteCode = async (inviteCode: string): Promise<{ success: boolean; message: string }> => {
     if (!currentUser) return { success: false, message: 'Please log in first.' };
-    const cleanCode = inviteCode.trim().toUpperCase();
-    if (!cleanCode) return { success: false, message: 'Please enter an invite code.' };
+    const raw = inviteCode.trim().toUpperCase();
+    if (!raw) return { success: false, message: 'Please enter an invite code.' };
+
+    const cleanCode = raw.startsWith('NX-') || raw.startsWith('US-') ? raw : `NX-${raw}`;
 
     if (currentUser.partner_id) {
       return { success: false, message: 'You are already in an active partnership. Disconnect your current partner first.' };
     }
 
-    // 1. Check if there is a pending invitation with this code
+    if (currentUser.invite_code?.toUpperCase() === cleanCode || currentUser.invite_code?.toUpperCase() === raw) {
+      return { success: false, message: 'You cannot connect using your own invite code.' };
+    }
+
+    // 1. Check local pending invitations
     const matchingInvitation = state.partnerInvitations.find(
-      (inv) => inv.invite_code.toUpperCase() === cleanCode && inv.status === 'pending'
+      (inv) => (inv.invite_code.toUpperCase() === cleanCode || inv.invite_code.toUpperCase() === raw) && inv.status === 'pending'
     );
 
     if (matchingInvitation) {
@@ -423,51 +618,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return acceptPartnerInvitation(matchingInvitation.id);
     }
 
-    // 2. Check if code matches personal code of another user: NX-<ID> or US-<ID>
-    const targetUser = state.allUsers.find(
-      (u) => u.id !== currentUser.id &&
-      (`NX-${u.id.slice(-6).toUpperCase()}` === cleanCode || `US-${u.id.slice(-6).toUpperCase()}` === cleanCode)
+    // 2. Check local registered users (same machine or synced)
+    const localTarget = state.allUsers.find(
+      (u) => u.id !== currentUser.id && (
+        u.invite_code?.toUpperCase() === cleanCode || 
+        u.invite_code?.toUpperCase() === raw ||
+        cleanCode.includes(u.id.slice(-6).toUpperCase()) ||
+        u.email.toLowerCase() === raw.toLowerCase()
+      )
     );
 
-    if (targetUser) {
-      if (targetUser.partner_id) {
-        return { success: false, message: `${targetUser.full_name} is already connected with another partner.` };
+    if (localTarget) {
+      if (localTarget.partner_id) {
+        return { success: false, message: `${localTarget.full_name} is already connected with another partner.` };
       }
-
-      const newPartnership: Partnership = {
-        id: `part-${Date.now()}`,
-        user_a_id: targetUser.id,
-        user_b_id: currentUser.id,
-        anniversary_date: new Date().toISOString().split('T')[0],
-        shared_streak: 1,
-        best_shared_streak: 1,
-        status: 'active',
-        created_at: new Date().toISOString()
-      };
-
-      updateAndPersist((prev) => {
-        const updatedUsers = prev.allUsers.map((u) => {
-          if (u.id === targetUser.id) {
-            return { ...u, partner_id: currentUser.id, partnership_id: newPartnership.id };
-          }
-          if (u.id === currentUser.id) {
-            return { ...u, partner_id: targetUser.id, partnership_id: newPartnership.id };
-          }
-          return u;
-        });
-
-        return {
-          ...prev,
-          allUsers: updatedUsers,
-          partnerships: [newPartnership, ...prev.partnerships]
-        };
-      });
-
-      triggerCelebration();
-      return { success: true, message: `Connected with ${targetUser.full_name}! Shared synergy unlocked.` };
+      return linkPartnership(localTarget);
     }
 
-    return { success: false, message: 'Invalid or expired invite code. Please check with your partner.' };
+    // 3. Check Cloud Relay (Cross-Device: partner is on another phone)
+    const remoteTarget = await lookupRemoteInvite(cleanCode) || await lookupRemoteInvite(raw);
+    if (remoteTarget) {
+      if (remoteTarget.id === currentUser.id || remoteTarget.email.toLowerCase() === currentUser.email.toLowerCase()) {
+        return { success: false, message: 'You cannot connect using your own invite code.' };
+      }
+      await acceptRemoteInvite(cleanCode, currentUser);
+      return linkPartnership(remoteTarget);
+    }
+
+    return { 
+      success: false, 
+      message: 'Invite code not found. Make sure your partner opened their Partner Code on their device, or enter their registered email address.' 
+    };
   };
 
   const rejectPartnerInvitation = (invitationId: string) => {
@@ -1126,6 +1307,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendPartnerInvitation,
         inviteUserById,
         connectByInviteCode,
+        connectWithPartnerInfo,
         cancelInvitation,
         acceptPartnerInvitation,
         rejectPartnerInvitation,

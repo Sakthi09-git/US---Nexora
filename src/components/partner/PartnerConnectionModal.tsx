@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { publishInviteOffer } from '../../lib/cloudSync';
 import { 
   X, 
   Send, 
@@ -54,13 +55,21 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
 
   if (!isOpen || !currentUser) return null;
 
-  const myInviteCode = pendingInvitationsSent[0]?.invite_code || `NX-${currentUser.id.slice(-6).toUpperCase()}`;
+  const myInviteCode = currentUser.invite_code || pendingInvitationsSent[0]?.invite_code || `NX-${currentUser.id.slice(-6).toUpperCase()}`;
   const myInviteLink = `${window.location.origin}/?join=${myInviteCode}&joinUser=${currentUser.id}`;
 
-  const handleConnectByCode = (e: React.FormEvent) => {
+  // Broadcast invite code offer to Cloud Relay whenever modal is open
+  useEffect(() => {
+    if (isOpen && currentUser && myInviteCode) {
+      publishInviteOffer(myInviteCode, currentUser);
+    }
+  }, [isOpen, currentUser?.id, myInviteCode]);
+
+  const handleConnectByCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCode.trim()) return;
-    const res = connectByInviteCode(inputCode.trim());
+    setFeedback({ success: true, message: 'Looking up partner code...' });
+    const res = await connectByInviteCode(inputCode.trim());
     setFeedback(res);
     if (res.success) {
       setInputCode('');
@@ -89,7 +98,7 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
 
   const handleWhatsAppShare = () => {
     const text = encodeURIComponent(
-      `Hey! Let's grow together on Nexora. Install the app and connect with me using my invite link:\n${myInviteLink}\nOr enter invite code: ${myInviteCode}`
+      `Hey! Let's grow together on Nexora. Install the app and connect with me using my partner code: *${myInviteCode}*\n\nOr click your invite link:\n${myInviteLink}`
     );
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };

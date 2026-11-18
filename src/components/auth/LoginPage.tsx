@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   Sparkles, 
@@ -43,6 +43,21 @@ export const LoginPage: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
+  const [partnerInviteCode, setPartnerInviteCode] = useState('');
+
+  // Handle ?join=CODE in URL query or sessionStorage
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const join = params.get('join') || params.get('joinUser') || sessionStorage.getItem('nexora_pending_join');
+      if (join) {
+        setPartnerInviteCode(join.toUpperCase());
+        setMode('register');
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   // Forgot Password Fields
   const [otpCode, setOtpCode] = useState('');
@@ -91,7 +106,8 @@ export const LoginPage: React.FC = () => {
         email,
         phone_number: phone,
         password,
-        avatar_url: selectedAvatar
+        avatar_url: selectedAvatar,
+        partnerInviteCode: partnerInviteCode.trim() || undefined
       });
 
       if (!res.success) {
@@ -386,6 +402,27 @@ export const LoginPage: React.FC = () => {
                       className="w-full bg-black/40 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
+                </div>
+
+                {/* Partner Invite Code (Optional) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-300">Partner Invite Code</label>
+                    <span className="text-[10px] text-pink-400 font-medium">Auto-pairs with partner</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={partnerInviteCode}
+                      onChange={(e) => setPartnerInviteCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. NX-A7B2C9"
+                      className="w-full bg-black/40 border border-pink-500/30 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 uppercase font-mono tracking-wider focus:outline-none focus:border-pink-500"
+                    />
+                    <KeyRound className="w-4 h-4 text-pink-400 absolute left-3 top-2.5" />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Enter your partner's 6-character code to link accounts immediately upon signup.
+                  </p>
                 </div>
 
                 <button

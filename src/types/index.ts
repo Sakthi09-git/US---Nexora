@@ -26,6 +26,7 @@ export interface User {
   partnership_id?: string | null;
   share_progress_with_partner?: boolean;
   password?: string; // Stored securely/simulated in local engine
+  invite_code?: string; // Permanent 6-character partner invite code e.g. 'NX-83F19A'
   created_at: string;
 }
 

@@ -19,6 +19,38 @@ import {
 
 const STORAGE_KEY = 'nexora_live_app_v2';
 const SYNC_CHANNEL_NAME = 'nexora_multiuser_sync';
+const SESSION_KEY = 'nexora_active_session_user';
+
+export function generateInviteCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `NX-${code}`;
+}
+
+export function getActiveSessionUserId(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveSessionUserId(userId: string | null): void {
+  try {
+    if (userId) {
+      sessionStorage.setItem(SESSION_KEY, userId);
+      localStorage.setItem(SESSION_KEY, userId);
+    } else {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY);
+    }
+  } catch {
+    // Ignore in non-browser env
+  }
+}
 
 export interface AppState {
   allUsers: User[];
@@ -219,6 +251,13 @@ export function loadAppState(): AppState {
     if (!parsed.allUsers || parsed.allUsers.length === 0) {
       parsed.currentUserId = null;
       parsed.allUsers = [];
+      setActiveSessionUserId(null);
+    } else {
+      // Use tab session if available to allow multiple tabs to be logged in as different users
+      const sessionUser = getActiveSessionUserId();
+      if (sessionUser && parsed.allUsers.some((u: User) => u.id === sessionUser)) {
+        parsed.currentUserId = sessionUser;
+      }
     }
 
     return parsed;
@@ -231,6 +270,9 @@ export function loadAppState(): AppState {
 export function saveAppState(state: AppState, broadcast = true): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (state.currentUserId) {
+      setActiveSessionUserId(state.currentUserId);
+    }
     if (broadcast && broadcastChannel) {
       broadcastChannel.postMessage({ type: 'STATE_UPDATED', timestamp: Date.now() });
     }
