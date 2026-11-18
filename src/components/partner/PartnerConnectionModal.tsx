@@ -13,7 +13,8 @@ import {
   Users, 
   Search, 
   Share2, 
-  Clock
+  Clock,
+  KeyRound
 } from 'lucide-react';
 
 interface PartnerConnectionModalProps {
@@ -32,6 +33,7 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
     activePartnership,
     sendPartnerInvitation,
     inviteUserById,
+    connectByInviteCode,
     cancelInvitation,
     acceptPartnerInvitation, 
     rejectPartnerInvitation, 
@@ -45,14 +47,26 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
   const [activeTab, setActiveTab] = useState<'members' | 'link'>('members');
   const [memberSearch, setMemberSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inputCode, setInputCode] = useState('');
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   if (!isOpen || !currentUser) return null;
 
-  const myInviteCode = pendingInvitationsSent[0]?.invite_code || `US-${currentUser.id.slice(-6).toUpperCase()}`;
+  const myInviteCode = pendingInvitationsSent[0]?.invite_code || `NX-${currentUser.id.slice(-6).toUpperCase()}`;
   const myInviteLink = `${window.location.origin}/?join=${myInviteCode}&joinUser=${currentUser.id}`;
+
+  const handleConnectByCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCode.trim()) return;
+    const res = connectByInviteCode(inputCode.trim());
+    setFeedback(res);
+    if (res.success) {
+      setInputCode('');
+      setTimeout(onClose, 1500);
+    }
+  };
 
   const handleSendInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -436,6 +450,34 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
                         <span>Share on WhatsApp</span>
                       </button>
                     </div>
+                  </div>
+
+                  {/* Connect with Partner Invite Code */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-pink-950/20 to-indigo-950/20 border border-pink-500/20 space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-pink-400" />
+                      <span className="text-xs text-white font-semibold">Have a Partner Invite Code?</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      If your partner gave you their invite code (e.g. NX-XXXXXX), enter it below to connect instantly.
+                    </p>
+                    <form onSubmit={handleConnectByCode} className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        required
+                        value={inputCode}
+                        onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. NX-A7B2C9"
+                        className="flex-1 bg-black/40 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white font-mono uppercase tracking-wider focus:outline-none focus:border-pink-500 placeholder-slate-600"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 shrink-0 shadow-md shadow-pink-600/20"
+                      >
+                        <Heart className="w-3.5 h-3.5 fill-white" />
+                        <span>Pair Up</span>
+                      </button>
+                    </form>
                   </div>
 
                   {/* Send Email Invitation */}

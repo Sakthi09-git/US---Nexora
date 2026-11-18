@@ -33,6 +33,7 @@ interface DailyStats {
   coupleCompleted: number;
   couplePercent: number;
   pendingActivities: number;
+  currentStreak: number;
 }
 
 export interface FinalizationPreview {
@@ -68,6 +69,7 @@ interface AppContextType {
   // Partner Connection
   sendPartnerInvitation: (receiverEmail: string) => { success: boolean; message: string };
   inviteUserById: (targetUserId: string) => { success: boolean; message: string };
+  connectByInviteCode: (inviteCode: string) => { success: boolean; message: string };
   cancelInvitation: (invitationId: string) => void;
   acceptPartnerInvitation: (invitationId: string) => { success: boolean; message: string };
   rejectPartnerInvitation: (invitationId: string) => void;
@@ -398,6 +400,74 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     triggerCelebration();
     return { success: true, message: `Connected with ${sender.full_name}! Shared synergy unlocked.` };
+  };
+
+  const connectByInviteCode = (inviteCode: string): { success: boolean; message: string } => {
+    if (!currentUser) return { success: false, message: 'Please log in first.' };
+    const cleanCode = inviteCode.trim().toUpperCase();
+    if (!cleanCode) return { success: false, message: 'Please enter an invite code.' };
+
+    if (currentUser.partner_id) {
+      return { success: false, message: 'You are already in an active partnership. Disconnect your current partner first.' };
+    }
+
+    // 1. Check if there is a pending invitation with this code
+    const matchingInvitation = state.partnerInvitations.find(
+      (inv) => inv.invite_code.toUpperCase() === cleanCode && inv.status === 'pending'
+    );
+
+    if (matchingInvitation) {
+      if (matchingInvitation.sender_user_id === currentUser.id) {
+        return { success: false, message: 'You cannot connect using your own invite code.' };
+      }
+      return acceptPartnerInvitation(matchingInvitation.id);
+    }
+
+    // 2. Check if code matches personal code of another user: NX-<ID> or US-<ID>
+    const targetUser = state.allUsers.find(
+      (u) => u.id !== currentUser.id &&
+      (`NX-${u.id.slice(-6).toUpperCase()}` === cleanCode || `US-${u.id.slice(-6).toUpperCase()}` === cleanCode)
+    );
+
+    if (targetUser) {
+      if (targetUser.partner_id) {
+        return { success: false, message: `${targetUser.full_name} is already connected with another partner.` };
+      }
+
+      const newPartnership: Partnership = {
+        id: `part-${Date.now()}`,
+        user_a_id: targetUser.id,
+        user_b_id: currentUser.id,
+        anniversary_date: new Date().toISOString().split('T')[0],
+        shared_streak: 1,
+        best_shared_streak: 1,
+        status: 'active',
+        created_at: new Date().toISOString()
+      };
+
+      updateAndPersist((prev) => {
+        const updatedUsers = prev.allUsers.map((u) => {
+          if (u.id === targetUser.id) {
+            return { ...u, partner_id: currentUser.id, partnership_id: newPartnership.id };
+          }
+          if (u.id === currentUser.id) {
+            return { ...u, partner_id: targetUser.id, partnership_id: newPartnership.id };
+          }
+          return u;
+        });
+
+        return {
+          ...prev,
+          allUsers: updatedUsers,
+          partnerships: [newPartnership, ...prev.partnerships]
+        };
+      });
+
+      triggerCelebration();
+      return { success: true, message: `Connected with ${targetUser.full_name}! Shared synergy unlocked.` };
+    }
+
+    return { success: false, message: 'Invalid or expired invite code. Please check with your partner.' };
   };
 
   const rejectPartnerInvitation = (invitationId: string) => {
@@ -942,7 +1012,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         coupleTotal: 0,
         coupleCompleted: 0,
         couplePercent: 0,
-        pendingActivities: 0
+        pendingActivities: 0,
+        currentStreak: 0
       };
     }
 
@@ -955,6 +1026,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const aDone = myCompletions.length;
     const aPercent = aTotal > 0 ? Math.round((aDone / aTotal) * 100) : 0;
     const pendingActivities = Math.max(0, aTotal - aDone);
+
+    // Calculate consecutive active days streak
+    const completionDates = new Set(
+      state.habitCompletions
+        .filter((c) => c.user_id === currentUser.id && c.is_completed)
+        .map((c) => c.completion_date)
+    );
+    let streak = 0;
+    const checkDate = new Date();
+    const todayFormatted = checkDate.toISOString().split('T')[0];
+    if (!completionDates.has(todayFormatted)) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    for (let i = 0; i < 365; i++) {
+      const dStr = checkDate.toISOString().split('T')[0];
+      if (completionDates.has(dStr)) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
 
     let bTotal = 0;
     let bDone = 0;
@@ -984,7 +1077,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       coupleTotal: combinedTotal,
       coupleCompleted: combinedDone,
       couplePercent,
-      pendingActivities
+      pendingActivities,
+      currentStreak: streak
     };
   };
 
@@ -1031,6 +1125,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         sendPartnerInvitation,
         inviteUserById,
+        connectByInviteCode,
         cancelInvitation,
         acceptPartnerInvitation,
         rejectPartnerInvitation,

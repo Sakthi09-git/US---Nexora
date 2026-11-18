@@ -31,7 +31,9 @@ const PRESET_AVATARS = [
 export const LoginPage: React.FC = () => {
   const { loginUser, registerUser, resetPassword, state } = useApp();
 
-  const [mode, setMode] = useState<'signin' | 'register' | 'forgot'>('signin');
+  const [mode, setMode] = useState<'signin' | 'register' | 'forgot'>(
+    state.allUsers.length === 0 ? 'register' : 'signin'
+  );
   const [showPassword, setShowPassword] = useState(false);
 
   // Form Fields
@@ -137,12 +139,6 @@ export const LoginPage: React.FC = () => {
         setFeedback({ success: false, message: 'Failed to reset password.' });
       }
     }
-  };
-
-  const handleQuickLogin = (quickEmail: string, quickPass: string = 'password123') => {
-    setEmail(quickEmail);
-    setPassword(quickPass);
-    loginUser(quickEmail, quickPass);
   };
 
   return (
@@ -298,40 +294,6 @@ export const LoginPage: React.FC = () => {
                   {loading ? 'Signing In...' : 'Sign In to Workspace'}
                   <ArrowRight className="w-4 h-4" />
                 </button>
-
-                {/* Quick Test Accounts */}
-                <div className="pt-4 border-t border-white/[0.08]">
-                  <p className="text-[11px] text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
-                    <Compass className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Quick Test Login (1-Click Access):</span>
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickLogin('alex@growth.us')}
-                      className="p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] text-left transition-all group"
-                    >
-                      <div className="text-[11px] font-bold text-white group-hover:text-indigo-300">Alex R.</div>
-                      <div className="text-[10px] text-emerald-400">Partnered</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickLogin('sam@growth.us')}
-                      className="p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] text-left transition-all group"
-                    >
-                      <div className="text-[11px] font-bold text-white group-hover:text-indigo-300">Sam C.</div>
-                      <div className="text-[10px] text-emerald-400">Partnered</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickLogin('maya@growth.us')}
-                      className="p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] text-left transition-all group"
-                    >
-                      <div className="text-[11px] font-bold text-white group-hover:text-indigo-300">Maya P.</div>
-                      <div className="text-[10px] text-indigo-400">Solo Mode</div>
-                    </button>
-                  </div>
-                </div>
               </form>
             )}
 

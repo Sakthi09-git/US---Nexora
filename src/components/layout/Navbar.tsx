@@ -162,28 +162,6 @@ export const Navbar: React.FC = () => {
                     </span>
                   </button>
 
-                  {/* Switch Active Account (Instant Multi-User Test) */}
-                  <div className="pt-2 mt-1 border-t border-white/[0.06]">
-                    <div className="text-[10px] text-slate-500 px-3 py-1 uppercase tracking-wider font-semibold">
-                      Switch Test User Account:
-                    </div>
-                    {state.allUsers.map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          switchActiveUser(u.id);
-                          setIsUserMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs flex items-center justify-between ${
-                          u.id === currentUser.id ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <span className="truncate">{u.full_name}</span>
-                        <span className="text-[10px] opacity-75">{u.role}</span>
-                      </button>
-                    ))}
-                  </div>
-
                   {/* Create New / Logout */}
                   <div className="pt-2 mt-1 border-t border-white/[0.06] flex items-center justify-between">
                     <button

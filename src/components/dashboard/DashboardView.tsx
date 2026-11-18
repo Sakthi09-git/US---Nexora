@@ -249,12 +249,12 @@ export const DashboardView: React.FC<{ onNavigateToTab: (tab: any) => void }> = 
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-white tracking-tight">
-              {activePartnership ? activePartnership.shared_streak : 18}
+              {activePartnership ? activePartnership.shared_streak : (stats.currentStreak || 0)}
             </span>
             <span className="text-xs text-amber-300 font-semibold">Days Continuous</span>
           </div>
           <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
-            <span>All-time Best: {activePartnership ? activePartnership.best_shared_streak : 24}d</span>
+            <span>All-time Best: {activePartnership ? activePartnership.best_shared_streak : (stats.currentStreak || 0)}d</span>
             <span className="text-amber-400 font-medium">Active</span>
           </div>
         </div>
@@ -390,7 +390,7 @@ export const DashboardView: React.FC<{ onNavigateToTab: (tab: any) => void }> = 
               </div>
               <div>
                 <div className="text-xs text-slate-400 font-medium">Active Streak</div>
-                <div className="text-sm font-bold text-amber-400 mt-0.5">18d 🔥</div>
+                <div className="text-sm font-bold text-amber-400 mt-0.5">{stats.currentStreak || 0}d 🔥</div>
               </div>
             </div>
           </div>
@@ -417,57 +417,75 @@ export const DashboardView: React.FC<{ onNavigateToTab: (tab: any) => void }> = 
         </div>
 
         <div className="space-y-2.5">
-          {myHabits.slice(0, 6).map((habit) => {
-            const completed = isHabitDone(habit.id, currentUser.id);
-
-            return (
-              <div
-                key={habit.id}
-                onClick={() => toggleHabitCompletion(habit.id, todayDateStr)}
-                className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
-                  completed
-                    ? 'bg-emerald-950/20 border-emerald-500/30'
-                    : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
-                }`}
+          {myHabits.length === 0 ? (
+            <div className="text-center py-10 px-4 rounded-xl border border-dashed border-white/[0.1] bg-white/[0.01]">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 mx-auto flex items-center justify-center mb-3">
+                <Target className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-semibold text-white">No habits created yet</h4>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
+                Start building your routine! Add your first daily habit to track your personal growth and build streaks.
+              </p>
+              <button
+                onClick={() => onNavigateToTab('my-habits')}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <button className="text-slate-400 focus:outline-none">
-                    {completed ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 fill-emerald-400/20 animate-in zoom-in-75 duration-200" />
-                    ) : (
-                      <Circle className="w-5 h-5 text-slate-500 hover:text-slate-300" />
-                    )}
-                  </button>
-                  <div>
-                    <h4 className={`text-sm font-medium ${completed ? 'line-through text-slate-400' : 'text-slate-200'}`}>
-                      {habit.name}
-                    </h4>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-slate-500 capitalize">
-                        {habit.category.replace('_', ' ')}
-                      </span>
-                      {habit.is_shared && partnerUser && (
-                        <span className="text-[10px] text-indigo-400">
-                          • Shared with {partnerUser.full_name.split(' ')[0]}
-                        </span>
+                + Create Your First Habit
+              </button>
+            </div>
+          ) : (
+            myHabits.slice(0, 6).map((habit) => {
+              const completed = isHabitDone(habit.id, currentUser.id);
+
+              return (
+                <div
+                  key={habit.id}
+                  onClick={() => toggleHabitCompletion(habit.id, todayDateStr)}
+                  className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                    completed
+                      ? 'bg-emerald-950/20 border-emerald-500/30'
+                      : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button className="text-slate-400 focus:outline-none">
+                      {completed ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 fill-emerald-400/20 animate-in zoom-in-75 duration-200" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-slate-500 hover:text-slate-300" />
                       )}
-                      {habit.is_private && (
-                        <span className="text-[10px] text-amber-400/80">
-                          • Private
+                    </button>
+                    <div>
+                      <h4 className={`text-sm font-medium ${completed ? 'line-through text-slate-400' : 'text-slate-200'}`}>
+                        {habit.name}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-slate-500 capitalize">
+                          {habit.category.replace('_', ' ')}
                         </span>
-                      )}
+                        {habit.is_shared && partnerUser && (
+                          <span className="text-[10px] text-indigo-400">
+                            • Shared with {partnerUser.full_name.split(' ')[0]}
+                          </span>
+                        )}
+                        {habit.is_private && (
+                          <span className="text-[10px] text-amber-400/80">
+                            • Private
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-slate-400">
-                    {habit.daily_target} {habit.target_unit}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400">
+                      {habit.daily_target} {habit.target_unit}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </section>
 
