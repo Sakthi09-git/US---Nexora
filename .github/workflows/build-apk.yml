@@ -20,10 +20,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Node Dependencies
@@ -37,7 +37,9 @@ jobs:
 
       - name: Accept Android SDK Licenses
         run: |
-          yes | sdkmanager --licenses 2>/dev/null || true
+          if [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          fi
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
@@ -50,7 +52,8 @@ jobs:
       - name: Locate & Rename APK
         run: |
           mkdir -p apk_output
-          cp android/app/build/outputs/apk/debug/app-debug.apk apk_output/Nexora.apk
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} apk_output/Nexora.apk \;
+          ls -la apk_output/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
