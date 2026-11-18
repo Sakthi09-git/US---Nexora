@@ -45,7 +45,7 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
     state
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'members' | 'link'>('members');
+  const [activeTab, setActiveTab] = useState<'link' | 'members'>('link');
   const [memberSearch, setMemberSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inputCode, setInputCode] = useState('');
@@ -119,25 +119,25 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl glass-panel rounded-3xl border border-white/[0.12] p-6 shadow-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col">
         
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] pb-4 shrink-0">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-3.5 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-400">
+            <div className="p-2 rounded-xl bg-zinc-800 text-pink-400">
               <Heart className="w-5 h-5 fill-pink-400/20" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white">
-                {isConnectedWithPartner ? 'Partner Connection & Privacy' : 'Connect & Grow Together'}
+                {isConnectedWithPartner ? 'Partner Connection' : 'Connect with Partner'}
               </h3>
-              <p className="text-xs text-slate-400">Collaborate with your partner while maintaining privacy</p>
+              <p className="text-xs text-zinc-400">Collaborate while keeping private habits personal</p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.05]"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -297,30 +297,30 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
               )}
 
               {/* Sub-tabs */}
-              <div className="flex p-1 rounded-xl bg-black/40 border border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('members')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                    activeTab === 'members'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Application Members ({otherMembers.length})</span>
-                </button>
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-950/80 border border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setActiveTab('link')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                     activeTab === 'link'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span>Invite Link &amp; Code</span>
+                  <span>Invite &amp; Connect</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('members')}
+                  className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                    activeTab === 'members'
+                      ? 'bg-zinc-800 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Members ({otherMembers.length})</span>
                 </button>
               </div>
 

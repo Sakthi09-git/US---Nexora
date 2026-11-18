@@ -27,8 +27,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentTab, onSelectTab })
   ];
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-white/[0.08] px-2 py-1.5 backdrop-blur-xl bg-[#090A0F]/90">
-      <div className="flex items-center justify-around">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-2 pt-2 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
+      <div className="flex items-center justify-around max-w-md mx-auto">
         {mobileTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id || (tab.id === 'my-habits' && currentTab === 'shared-habits');
@@ -38,11 +38,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentTab, onSelectTab })
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
               className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative ${
-                isActive ? 'text-indigo-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-indigo-400 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               <div className="relative">
-                <Icon className={`w-5 h-5 ${isActive ? 'scale-110 text-indigo-400' : 'text-slate-400'}`} />
+                <Icon className={`w-5 h-5 ${isActive ? 'scale-105 text-indigo-400' : 'text-zinc-400'}`} />
                 {tab.badge && (
                   <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-indigo-500 text-white text-[9px] font-bold">
                     {tab.badge}

@@ -66,7 +66,7 @@ const MainLayout: React.FC = () => {
         <Sidebar currentTab={currentTab} onSelectTab={setCurrentTab} />
 
         {/* Content View */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-5xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 max-w-5xl w-full mx-auto pb-[calc(max(env(safe-area-inset-bottom,0px),1rem)+5rem)] lg:pb-8">
           {renderActiveView()}
         </main>
       </div>

@@ -9,13 +9,33 @@
     --partner-a: #8b5cf6;
     --partner-b: #10b981;
     --couple-gold: #f59e0b;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
   }
 
   body {
     background-color: #090a0f;
     color: #f1f5f9;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
   }
+}
+
+/* Mobile Safe-Area Utilities */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 1rem);
+}
+.pt-safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 2rem);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+}
+.pb-safe-nav {
+  padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), 0.75rem) + 4.5rem);
 }
 
 /* Custom Scrollbars */

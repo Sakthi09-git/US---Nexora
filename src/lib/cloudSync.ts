@@ -61,7 +61,9 @@ export async function lookupRemoteInvite(inviteCode: string): Promise<User | nul
   try {
     const clean = inviteCode.trim().toUpperCase();
     const channel = getChannel(`invite_${clean}`);
-    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1`);
+    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1&since=all`, {
+      signal: AbortSignal.timeout(2500)
+    });
     if (!res.ok) return null;
 
     const text = await res.text();
@@ -118,7 +120,9 @@ export async function checkInviteAcceptance(inviteCode: string): Promise<User | 
   try {
     const clean = inviteCode.trim().toUpperCase();
     const channel = getChannel(`invite_${clean}`);
-    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1`);
+    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1&since=all`, {
+      signal: AbortSignal.timeout(2500)
+    });
     if (!res.ok) return null;
 
     const text = await res.text();
@@ -178,7 +182,9 @@ export async function publishPartnerProgress(partnershipId: string, progress: {
 export async function fetchPartnerProgress(partnershipId: string): Promise<RemoteProgressPayload | null> {
   try {
     const channel = getChannel(`progress_${partnershipId}`);
-    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1`);
+    const res = await fetch(`${NTFY_BASE}/${channel}/json?poll=1&since=all`, {
+      signal: AbortSignal.timeout(2500)
+    });
     if (!res.ok) return null;
 
     const text = await res.text();
