@@ -18,6 +18,11 @@ import {
   publishPartnerProgress,
   fetchPartnerProgress
 } from '../lib/cloudSync';
+import {
+  syncUserToCloud,
+  fetchCloudInvitations,
+  sendCloudInvitation
+} from '../lib/supabase';
 import { 
   User, 
   Partnership,
@@ -170,16 +175,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const isConnectedWithPartner = Boolean(partnerUser && activePartnership);
 
-  // Cross-Device Cloud Sync: Listen for remote invite acceptance
+  // Cross-Device Cloud Sync: Listen for remote invite acceptance & incoming invitations
   useEffect(() => {
-    if (!currentUser || currentUser.partner_id || !currentUser.invite_code) return;
+    if (!currentUser) return;
 
     const interval = setInterval(async () => {
       try {
-        if (!currentUser.invite_code || currentUser.partner_id) return;
-        const acceptedBy = await checkInviteAcceptance(currentUser.invite_code);
-        if (acceptedBy && acceptedBy.id !== currentUser.id && !currentUser.partner_id) {
-          linkPartnership(acceptedBy);
+        // 1. Check if our invite code was accepted
+        if (currentUser.invite_code && !currentUser.partner_id) {
+          const acceptedBy = await checkInviteAcceptance(currentUser.invite_code);
+          if (acceptedBy && acceptedBy.id !== currentUser.id && !currentUser.partner_id) {
+            linkPartnership(acceptedBy);
+          }
+        }
+
+        // 2. Poll incoming cloud database invitations for current user's email
+        if (!currentUser.partner_id && currentUser.email) {
+          const remoteInvs = await fetchCloudInvitations(currentUser.email);
+          if (remoteInvs && remoteInvs.length > 0) {
+            updateAndPersist((prev) => {
+              const existingIds = new Set(prev.partnerInvitations.map((i) => i.id));
+              const newInvs = remoteInvs.filter((i) => !existingIds.has(i.id));
+              if (newInvs.length > 0) {
+                return {
+                  ...prev,
+                  partnerInvitations: [...newInvs, ...prev.partnerInvitations]
+                };
+              }
+              return prev;
+            });
+          }
         }
       } catch {
         // Non-blocking
@@ -187,7 +212,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [currentUser?.id, currentUser?.partner_id, currentUser?.invite_code]);
+  }, [currentUser?.id, currentUser?.partner_id, currentUser?.invite_code, currentUser?.email]);
 
   const triggerCelebration = () => {
     try {
@@ -306,6 +331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Auto-broadcast this user's invite code to the cloud relay
     publishInviteOffer(myInviteCode, newUser);
+    syncUserToCloud(newUser);
 
     // If paired with a remote partner, send acceptance signal back
     if (inviteInput && initialPartnerId) {
@@ -363,6 +389,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Publish to cloud relay
     publishInviteOffer(user.invite_code, user);
+    syncUserToCloud(user);
 
     setActiveSessionUserId(user.id);
 
@@ -537,8 +564,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       created_at: new Date().toISOString()
     };
 
-    // Broadcast to Cloud Relay
+    // Broadcast to Cloud Relay & Database
     publishInviteOffer(userCode, currentUser);
+    sendCloudInvitation(newInvitation);
 
     updateAndPersist((prev) => ({
       ...prev,

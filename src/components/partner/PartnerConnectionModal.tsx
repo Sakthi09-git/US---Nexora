@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { publishInviteOffer } from '../../lib/cloudSync';
+import { searchCloudUsers, isSupabaseConfigured } from '../../lib/supabase';
 import { 
   X, 
   Send, 
@@ -15,8 +16,11 @@ import {
   Search, 
   Share2, 
   Clock,
-  KeyRound
+  KeyRound,
+  Loader2,
+  Cloud
 } from 'lucide-react';
+import { User } from '../../types';
 
 interface PartnerConnectionModalProps {
   isOpen: boolean;
@@ -35,6 +39,7 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
     sendPartnerInvitation,
     inviteUserById,
     connectByInviteCode,
+    connectWithPartnerInfo,
     cancelInvitation,
     acceptPartnerInvitation, 
     rejectPartnerInvitation, 
@@ -47,6 +52,8 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<'link' | 'members'>('link');
   const [memberSearch, setMemberSearch] = useState('');
+  const [cloudSearchResults, setCloudSearchResults] = useState<User[]>([]);
+  const [isSearchingCloud, setIsSearchingCloud] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inputCode, setInputCode] = useState('');
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
@@ -64,6 +71,34 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
       publishInviteOffer(myInviteCode, currentUser);
     }
   }, [isOpen, currentUser?.id, myInviteCode]);
+
+  // Live Cloud Search across Supabase
+  useEffect(() => {
+    if (!memberSearch.trim()) {
+      setCloudSearchResults([]);
+      return;
+    }
+    let isMounted = true;
+    setIsSearchingCloud(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchCloudUsers(memberSearch.trim(), currentUser.id);
+        if (isMounted) {
+          setCloudSearchResults(results);
+        }
+      } catch {
+        // Ignore
+      } finally {
+        if (isMounted) setIsSearchingCloud(false);
+      }
+    }, 350);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [memberSearch, currentUser?.id]);
 
   const handleConnectByCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,9 +120,16 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
     if (res.success) setInviteEmail('');
   };
 
-  const handleInviteMember = (targetUserId: string) => {
-    const res = inviteUserById(targetUserId);
+  const handleInviteOrConnect = (targetUser: User) => {
+    if (targetUser.partner_id) {
+      setFeedback({ success: false, message: `${targetUser.full_name} is already connected with another partner.` });
+      return;
+    }
+    const res = connectWithPartnerInfo(targetUser);
     setFeedback(res);
+    if (res.success) {
+      setTimeout(onClose, 1500);
+    }
   };
 
   const handleCopyLink = () => {
@@ -111,11 +153,16 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
     }
   };
 
-  // Filter application members excluding currentUser
+  // Combine local and cloud search results without duplicates
   const otherMembers = state.allUsers.filter((u) => u.id !== currentUser.id);
-  const filteredMembers = otherMembers.filter((u) => 
+  const combinedMap = new Map<string, User>();
+  otherMembers.forEach((u) => combinedMap.set(u.email.toLowerCase(), u));
+  cloudSearchResults.forEach((u) => combinedMap.set(u.email.toLowerCase(), u));
+
+  const filteredMembers = Array.from(combinedMap.values()).filter((u) => 
     u.full_name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(memberSearch.toLowerCase())
+    u.email.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    u.invite_code?.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
   return (
@@ -332,16 +379,24 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
                       type="text"
                       value={memberSearch}
                       onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Search registered members by name or email..."
-                      className="w-full bg-black/40 border border-white/[0.1] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      placeholder="Search members by name, email, or code..."
+                      className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-9 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
                     />
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                    {isSearchingCloud && (
+                      <Loader2 className="w-4 h-4 text-indigo-400 absolute right-3 top-2.5 animate-spin" />
+                    )}
                   </div>
 
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                     {filteredMembers.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-500">
-                        No registered members found matching "{memberSearch}". You can also invite by direct email or share your invite link.
+                      <div className="p-6 text-center text-xs text-zinc-400 space-y-2">
+                        <p>No registered members found matching "{memberSearch}".</p>
+                        <p className="text-[11px] text-zinc-500">
+                          {isSupabaseConfigured() 
+                            ? 'Search queries all registered accounts across all devices in real time.'
+                            : 'Tip: Connect your Supabase Cloud Database in Settings to search users registered on different devices.'}
+                        </p>
                       </div>
                     ) : (
                       filteredMembers.map((member) => {
@@ -356,13 +411,13 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
                         return (
                           <div
                             key={member.id}
-                            className="p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.06] flex items-center justify-between transition-all"
+                            className="p-3 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-800 flex items-center justify-between transition-all"
                           >
                             <div className="flex items-center gap-3">
                               <img
                                 src={member.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed=User'}
                                 alt={member.full_name}
-                                className="w-9 h-9 rounded-xl object-cover border border-white/[0.1]"
+                                className="w-9 h-9 rounded-xl object-cover border border-zinc-700"
                               />
                               <div>
                                 <div className="flex items-center gap-2">
@@ -371,7 +426,7 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
                                     Lv {member.level}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-slate-400">{member.email}</p>
+                                <p className="text-[11px] text-zinc-400">{member.email}</p>
                               </div>
                             </div>
 
@@ -399,19 +454,19 @@ export const PartnerConnectionModal: React.FC<PartnerConnectionModalProps> = ({
                                       );
                                       if (inv) cancelInvitation(inv.id);
                                     }}
-                                    className="text-[10px] text-slate-400 hover:text-rose-400 p-1"
+                                    className="text-[10px] text-zinc-400 hover:text-rose-400 p-1"
                                     title="Cancel Invitation"
                                   >
                                     Cancel
                                   </button>
                                 </div>
                               ) : isMemberPartnered ? (
-                                <span className="text-[10px] text-slate-500 bg-white/[0.02] border border-white/[0.04] px-2 py-1 rounded-lg">
+                                <span className="text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-lg">
                                   Already Partnered
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleInviteMember(member.id)}
+                                  onClick={() => handleInviteOrConnect(member)}
                                   className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm flex items-center gap-1"
                                 >
                                   <Heart className="w-3 h-3" />

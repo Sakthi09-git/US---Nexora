@@ -14,9 +14,17 @@ import {
   Mail,
   UserCheck,
   UserX,
-  Lock
+  Lock,
+  Cloud,
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { 
+  isSupabaseConfigured, 
+  getSupabaseCredentials, 
+  saveSupabaseConfig, 
+  clearSupabaseConfig 
+} from '../../lib/supabase';
 import { PartnerConnectionModal } from '../partner/PartnerConnectionModal';
 import { DeployApkModal } from '../deploy/DeployApkModal';
 
@@ -40,6 +48,39 @@ export const SettingsView: React.FC = () => {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [phoneOtpInput, setPhoneOtpInput] = useState('');
   const [showPhoneVerifyBox, setShowPhoneVerifyBox] = useState(false);
+
+  // Cloud Database state
+  const creds = getSupabaseCredentials();
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState(creds.url);
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState(creds.key);
+  const [dbSaveFeedback, setDbSaveFeedback] = useState<string | null>(null);
+
+  const handleSaveCloudDB = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabaseUrlInput.trim() || !supabaseKeyInput.trim()) {
+      setDbSaveFeedback('Please enter both Project URL and Anon API Key.');
+      return;
+    }
+    const ok = saveSupabaseConfig(supabaseUrlInput.trim(), supabaseKeyInput.trim());
+    if (ok) {
+      setDbSaveFeedback('Cloud database connected successfully! Reloading...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      setDbSaveFeedback('Failed to save cloud credentials.');
+    }
+  };
+
+  const handleClearCloudDB = () => {
+    clearSupabaseConfig();
+    setSupabaseUrlInput('');
+    setSupabaseKeyInput('');
+    setDbSaveFeedback('Database disconnected. Using local offline storage.');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
 
   if (!currentUser) return null;
 
@@ -208,28 +249,94 @@ export const SettingsView: React.FC = () => {
         )}
       </div>
 
-      {/* 3. Database Architecture & Scalability */}
+      {/* 3. Live Cloud Database Connection (Supabase) */}
       <div className="glass-card rounded-2xl p-6 border border-white/[0.08] space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400">
-            <Database className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-white">Multi-Tenant PostgreSQL Architecture</h3>
-            <p className="text-xs text-slate-400">Scale to thousands of users with Row-Level Security (RLS)</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-3 rounded-xl ${isSupabaseConfigured() ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+              <Cloud className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">Live Cloud Database</h3>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${
+                  isSupabaseConfigured() ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}>
+                  {isSupabaseConfigured() ? 'Connected' : 'Local Storage Only'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isSupabaseConfigured() 
+                  ? 'All user accounts, member searches, and invitations sync across devices in real time.'
+                  : 'Connect a free Supabase project so users on different phones can search and pair seamlessly.'}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2 text-xs text-slate-400 leading-relaxed">
-          <p>
-            Every user's records are partitioned by <code className="text-indigo-300">user_id</code>. Under PostgreSQL RLS policies, a user's private habits, raw screen-time logs, and unverified data are cryptographically isolated from other users and platform administrators.
-          </p>
-          <div className="p-3 rounded-lg bg-black/60 font-mono text-[11px] text-slate-300 mt-2">
-            <div>Engine: Supabase Auth + PostgreSQL 16 Multi-Tenant</div>
-            <div>Isolation: Row Level Security (RLS) Active</div>
-            <div>Timezone: Asia/Kolkata (IST)</div>
+        {/* Database Configuration Form */}
+        <form onSubmit={handleSaveCloudDB} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+          {dbSaveFeedback && (
+            <div className={`p-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 ${
+              dbSaveFeedback.includes('successfully') ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border border-rose-500/30 text-rose-300'
+            }`}>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{dbSaveFeedback}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-medium text-slate-300 block mb-1">Supabase Project URL</label>
+            <input
+              type="url"
+              value={supabaseUrlInput}
+              onChange={(e) => setSupabaseUrlInput(e.target.value)}
+              placeholder="https://xyzcompany.supabase.co"
+              className="w-full bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500"
+            />
           </div>
-        </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-300 block mb-1">Supabase Anon Public API Key</label>
+            <input
+              type="password"
+              value={supabaseKeyInput}
+              onChange={(e) => setSupabaseKeyInput(e.target.value)}
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              className="w-full bg-black/40 border border-white/[0.1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <a
+              href="https://supabase.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+            >
+              <span>Create free Supabase project (1 min)</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+
+            <div className="flex gap-2">
+              {isSupabaseConfigured() && (
+                <button
+                  type="button"
+                  onClick={handleClearCloudDB}
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.04] text-slate-400 hover:text-rose-400 text-xs transition-colors"
+                >
+                  Disconnect
+                </button>
+              )}
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-all"
+              >
+                Save &amp; Connect DB
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       {/* 4. Deploy for Personal Use & Send APK to Friend */}
